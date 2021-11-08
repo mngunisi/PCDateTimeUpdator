@@ -5,6 +5,7 @@ import org.apache.commons.net.ntp.NtpV3Packet;
 import org.apache.commons.net.ntp.TimeInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.net.InetAddress;
@@ -12,17 +13,25 @@ import java.time.*;
 
 @Service
 public class DateTimeServiceImpl implements DateTimeService {
-    private static final String TIME_SERVER = "time-a.nist.gov";
+    @Value("${datetime.corrector.date.source.server}")
+    private String date_time_source_server;
     public static final Logger LOGGER = LoggerFactory.getLogger(DateTimeServiceImpl.class);
 
     @Override
     public void updatePcDateTime() {
         LocalDateTime dateTime = getCurrentDateTimeFromSource();
-        try {
-            Runtime.getRuntime().exec("cmd /c date " + getDateFromDateTime(dateTime));
-            Runtime.getRuntime().exec("cmd /c start time " + getTimeFromDateTime(dateTime));
-        } catch (Exception ex) {
-            LOGGER.info("Unable to update pc date and time", ex);
+        LocalDateTime pcDateTime = LocalDateTime.now().withSecond(0).withNano(0);
+        LocalDateTime zeroDatedMinutes = dateTime.withSecond(0).withNano(0);
+
+        if (pcDateTime.compareTo(zeroDatedMinutes) < 1)
+        {
+            LOGGER.info("Updating pc date and time");
+            try {
+                Runtime.getRuntime().exec("cmd /c date " + getDateFromDateTime(dateTime));
+                Runtime.getRuntime().exec("cmd /c time " + getTimeFromDateTime(dateTime));
+            } catch (Exception ex) {
+                LOGGER.info("Unable to update pc date and time", ex);
+            }
         }
     }
 
@@ -32,7 +41,7 @@ public class DateTimeServiceImpl implements DateTimeService {
         try
         {
             NTPUDPClient timeClient = new NTPUDPClient();
-            InetAddress inetAddress = InetAddress.getByName(TIME_SERVER);
+            InetAddress inetAddress = InetAddress.getByName(date_time_source_server);
             TimeInfo timeInfo = timeClient.getTime(inetAddress);
             NtpV3Packet message = timeInfo.getMessage();
             long serverTime = message.getTransmitTimeStamp().getTime();
